@@ -17,7 +17,12 @@ const state = {
 const getters = {
   theme: state => state.config.theme,
   locale: state => state.config.locale,
-  direction: state => getLangDirection(state.config.locale)
+  direction: state => getLangDirection(state.config.locale),
+  isRemoteMode: state => state.config.rpcMode === 'remote',
+  isRemoteMountEnabled: state => {
+    const { rpcMode, rpcRemoteDownloadDir, rpcRemoteMountPath } = state.config
+    return rpcMode === 'remote' && !!rpcRemoteDownloadDir && !!rpcRemoteMountPath
+  }
 }
 
 const mutations = {

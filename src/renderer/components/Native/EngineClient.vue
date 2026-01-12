@@ -4,7 +4,7 @@
 
 <script>
   import is from 'electron-is'
-  import { mapState } from 'vuex'
+  import { mapGetters, mapState } from 'vuex'
   import api from '@/api'
   import {
     getTaskFullPath,
@@ -35,6 +35,10 @@
       ...mapState('preference', {
         taskNotification: state => state.config.taskNotification
       }),
+      ...mapGetters('preference', [
+        'isRemoteMode',
+        'isRemoteMountEnabled'
+      ]),
       currentTaskIsBT () {
         return checkTaskIsBT(this.currentTaskItem)
       }
@@ -178,6 +182,10 @@
           body: `${taskName}${tips}`
         })
         notify.onclick = () => {
+          if (this.isRemoteMode && !this.isRemoteMountEnabled) {
+            this.$msg.warning('远程 RPC 模式未配置挂载路径，无法在本机打开文件夹。请在高级设置中填写“远程下载目录”和“挂载路径”。')
+            return
+          }
           showItemInFolder(path, {
             errorMsg: this.$t('task.file-not-exist')
           })

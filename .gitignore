@@ -4,6 +4,8 @@
 .idea/
 .vs/
 .vscode/
+.trae/
+backup/
 *.log
 node_modules/
 thumbs.db

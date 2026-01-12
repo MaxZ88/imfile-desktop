@@ -97,6 +97,8 @@ export default class Application extends EventEmitter {
   initConfigManager () {
     this.configListeners = {}
     this.configManager = new ConfigManager()
+    this.trackerSyncTimeout = null
+    this.trackerSyncRequestId = 0
   }
 
   isRemoteMode () {
@@ -338,6 +340,7 @@ export default class Application extends EventEmitter {
       }
 
       if (newValue === 'remote') {
+        this.cancelSyncTrackers()
         await this.stopEngine()
         await this.shutdownUPnPManager()
       } else {
@@ -349,6 +352,9 @@ export default class Application extends EventEmitter {
           this.startUPnPMapping()
         }
         this.autoSyncTrackers()
+        setTimeout(() => {
+          this.autoResumeTask()
+        }, 1000)
       }
     })
   }
@@ -501,8 +507,23 @@ export default class Application extends EventEmitter {
       return
     }
 
-    setTimeout(() => {
+    this.trackerSyncRequestId += 1
+    const requestId = this.trackerSyncRequestId
+
+    if (this.trackerSyncTimeout) {
+      clearTimeout(this.trackerSyncTimeout)
+      this.trackerSyncTimeout = null
+    }
+
+    this.trackerSyncTimeout = setTimeout(() => {
+      if (requestId !== this.trackerSyncRequestId || this.isRemoteMode()) {
+        return
+      }
+
       fetchBtTrackerFromSource(source, proxy).then((data) => {
+        if (requestId !== this.trackerSyncRequestId || this.isRemoteMode()) {
+          return
+        }
         logger.warn('[imFile] auto sync tracker data:', data)
         if (!data || data.length === 0) {
           return
@@ -522,6 +543,14 @@ export default class Application extends EventEmitter {
         logger.warn('[imFile] auto sync tracker failed:', err.message)
       })
     }, 500)
+  }
+
+  cancelSyncTrackers () {
+    this.trackerSyncRequestId += 1
+    if (this.trackerSyncTimeout) {
+      clearTimeout(this.trackerSyncTimeout)
+      this.trackerSyncTimeout = null
+    }
   }
 
   autoSyncTrackers () {
@@ -801,6 +830,15 @@ export default class Application extends EventEmitter {
   }
 
   async resetSession () {
+    if (this.isRemoteMode()) {
+      dialog.showMessageBox({
+        type: 'warning',
+        title: '提示',
+        message: '远程 RPC 模式不支持重置本地会话，请切换到本地模式后再操作。'
+      })
+      return
+    }
+
     await this.stopEngine()
 
     app.clearRecentDocuments()
