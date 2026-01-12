@@ -329,9 +329,9 @@ export default class Application extends EventEmitter {
   }
 
   watchRpcModeChange () {
-    const { systemConfig } = this.configManager
+    const { userConfig } = this.configManager
     const key = 'rpc-mode'
-    this.configListeners[key] = systemConfig.onDidChange(key, async (newValue, oldValue) => {
+    this.configListeners[key] = userConfig.onDidChange(key, async (newValue, oldValue) => {
       logger.info(`[imFile] detected ${key} value change event:`, newValue, oldValue)
       if (newValue === oldValue) {
         return
