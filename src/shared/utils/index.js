@@ -262,7 +262,7 @@ export const getFileNameFromFile = (file) => {
     path = decodeURI(file.uris[0].uri)
   }
 
-  const index = path.lastIndexOf('/')
+  const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
 
   if (index <= 0 || index === path.length) {
     return path
