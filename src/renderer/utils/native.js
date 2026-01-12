@@ -16,10 +16,12 @@ export const showItemInFolder = (fullPath, { errorMsg }) => {
 
   fullPath = resolve(fullPath)
   access(fullPath, constants.F_OK, (err) => {
-    console.warn(`[imFile] ${fullPath} ${err ? 'does not exist' : 'exists'}`)
-    if (err && errorMsg) {
-      Message.error(errorMsg)
-      return
+    if (err) {
+      console.warn(`[imFile] ${fullPath} does not exist`)
+      if (errorMsg) {
+        Message.error(errorMsg)
+        return
+      }
     }
 
     shell.showItemInFolder(fullPath)
