@@ -100,7 +100,7 @@ export default class Application extends EventEmitter {
   }
 
   isRemoteMode () {
-    return this.configManager.getSystemConfig('rpc-mode') === 'remote'
+    return this.configManager.getUserConfig('rpc-mode') === 'remote'
   }
 
   offConfigListeners () {

@@ -75,14 +75,6 @@ export default class ConfigManager {
         'pause-metadata': false,
         'pause': true,
         'rpc-listen-port': ENGINE_RPC_PORT,
-        'rpc-mode': 'local',
-        'rpc-remote-download-dir': EMPTY_STRING,
-        'rpc-remote-host': EMPTY_STRING,
-        'rpc-remote-mount-path': EMPTY_STRING,
-        'rpc-remote-path': '/jsonrpc',
-        'rpc-remote-port': 6800,
-        'rpc-remote-secret': EMPTY_STRING,
-        'rpc-remote-secure': false,
         'rpc-secret': EMPTY_STRING,
         'seed-ratio': 2,
         'seed-time': 2880,
@@ -132,6 +124,14 @@ export default class ConfigManager {
           'bypass': EMPTY_STRING,
           'scope': PROXY_SCOPE_OPTIONS
         },
+        'rpc-mode': 'local',
+        'rpc-remote-download-dir': EMPTY_STRING,
+        'rpc-remote-host': EMPTY_STRING,
+        'rpc-remote-mount-path': EMPTY_STRING,
+        'rpc-remote-path': '/jsonrpc',
+        'rpc-remote-port': 6800,
+        'rpc-remote-secret': EMPTY_STRING,
+        'rpc-remote-secure': false,
         'resume-all-when-app-launched': true,
         'run-mode': APP_RUN_MODE.STANDARD,
         'show-progress-bar': true,
@@ -159,6 +159,24 @@ export default class ConfigManager {
         this.systemConfig.delete(key)
       })
     }
+
+    const migrateKeys = [
+      'rpc-mode',
+      'rpc-remote-download-dir',
+      'rpc-remote-host',
+      'rpc-remote-mount-path',
+      'rpc-remote-path',
+      'rpc-remote-port',
+      'rpc-remote-secret',
+      'rpc-remote-secure'
+    ]
+    migrateKeys.forEach((key) => {
+      const value = this.systemConfig.get(key)
+      if (typeof value !== 'undefined') {
+        this.userConfig.set(key, value)
+        this.systemConfig.delete(key)
+      }
+    })
 
     const proxy = this.getUserConfig('proxy', { enable: false })
     const { enable, server, bypass, scope = [] } = proxy
