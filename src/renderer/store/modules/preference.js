@@ -29,7 +29,7 @@ const mutations = {
 const actions = {
   fetchPreference ({ dispatch }) {
     return new Promise((resolve) => {
-      api.fetchPreference()
+      api.reloadConfigAndReconnect()
         .then((config) => {
           dispatch('updatePreference', config)
           resolve(config)

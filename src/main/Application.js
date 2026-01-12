@@ -58,9 +58,10 @@ export default class Application extends EventEmitter {
 
     this.initUPnPManager()
 
-    this.startEngine()
-
-    this.initEngineClient()
+    if (!this.isRemoteMode()) {
+      this.startEngine()
+      this.initEngineClient()
+    }
 
     this.initThemeManager()
 
@@ -96,6 +97,10 @@ export default class Application extends EventEmitter {
   initConfigManager () {
     this.configListeners = {}
     this.configManager = new ConfigManager()
+  }
+
+  isRemoteMode () {
+    return this.configManager.getSystemConfig('rpc-mode') === 'remote'
   }
 
   offConfigListeners () {
@@ -147,6 +152,12 @@ export default class Application extends EventEmitter {
     const self = this
 
     try {
+      if (this.isRemoteMode()) {
+        return
+      }
+      if (this.engine && this.engine.instance) {
+        return
+      }
       this.engine = new Engine({
         systemConfig: this.configManager.getSystemConfig(),
         userConfig: this.configManager.getUserConfig()
@@ -168,20 +179,27 @@ export default class Application extends EventEmitter {
 
   async stopEngine () {
     logger.info('[imFile] stopEngine===>')
+    if (!this.engine || !this.engine.instance) {
+      return
+    }
     try {
-      await this.engineClient.shutdown({ force: true })
+      if (this.engineClient) {
+        await this.engineClient.shutdown({ force: true })
+      }
       logger.info('[imFile] stopEngine.setImmediate===>')
-      setImmediate(() => {
-        this.engine.stop()
-      })
     } catch (err) {
       logger.warn('[imFile] shutdown engine fail: ', err.message)
     } finally {
-      // no finally
+      setImmediate(() => {
+        this.engine.stop()
+      })
     }
   }
 
   initEngineClient () {
+    if (this.isRemoteMode()) {
+      return
+    }
     const port = this.configManager.getSystemConfig('rpc-listen-port')
     const secret = this.configManager.getSystemConfig('rpc-secret')
     this.engineClient = new EngineClient({
@@ -304,7 +322,34 @@ export default class Application extends EventEmitter {
         }
         : {}
       this.configManager.setSystemConfig(system)
-      this.engineClient.call('changeGlobalOption', system)
+      if (!this.isRemoteMode() && this.engineClient) {
+        this.engineClient.call('changeGlobalOption', system)
+      }
+    })
+  }
+
+  watchRpcModeChange () {
+    const { systemConfig } = this.configManager
+    const key = 'rpc-mode'
+    this.configListeners[key] = systemConfig.onDidChange(key, async (newValue, oldValue) => {
+      logger.info(`[imFile] detected ${key} value change event:`, newValue, oldValue)
+      if (newValue === oldValue) {
+        return
+      }
+
+      if (newValue === 'remote') {
+        await this.stopEngine()
+        await this.shutdownUPnPManager()
+      } else {
+        this.initEngineClient()
+        this.startEngine()
+
+        const enabled = this.configManager.getUserConfig('enable-upnp')
+        if (enabled) {
+          this.startUPnPMapping()
+        }
+        this.autoSyncTrackers()
+      }
     })
   }
 
@@ -354,7 +399,7 @@ export default class Application extends EventEmitter {
     this.watchUPnPPortsChange()
 
     const enabled = this.configManager.getUserConfig('enable-upnp')
-    if (!enabled) {
+    if (!enabled || this.isRemoteMode()) {
       return
     }
 
@@ -362,6 +407,9 @@ export default class Application extends EventEmitter {
   }
 
   async startUPnPMapping () {
+    if (this.isRemoteMode()) {
+      return
+    }
     const btPort = this.configManager.getSystemConfig('listen-port')
     const dhtPort = this.configManager.getSystemConfig('dht-listen-port')
 
@@ -398,6 +446,9 @@ export default class Application extends EventEmitter {
     watchKeys.forEach((key) => {
       this.configListeners[key] = systemConfig.onDidChange(key, async (newValue, oldValue) => {
         logger.info('[imFile] detected port change event:', key, newValue, oldValue)
+        if (this.isRemoteMode()) {
+          return
+        }
         const enable = this.configManager.getUserConfig('enable-upnp')
         if (!enable) {
           return
@@ -422,6 +473,9 @@ export default class Application extends EventEmitter {
     this.configListeners[key] = userConfig.onDidChange(key, async (newValue, oldValue) => {
       logger.info('[imFile] detected enable-upnp value change event:', newValue, oldValue)
       if (newValue) {
+        if (this.isRemoteMode()) {
+          return
+        }
         this.startUPnPMapping()
       } else {
         await this.stopUPnPMapping()
@@ -431,6 +485,9 @@ export default class Application extends EventEmitter {
   }
 
   async shutdownUPnPManager () {
+    if (!this.upnp) {
+      return
+    }
     const enable = this.configManager.getUserConfig('enable-upnp')
     if (enable) {
       await this.stopUPnPMapping()
@@ -468,6 +525,9 @@ export default class Application extends EventEmitter {
   }
 
   autoSyncTrackers () {
+    if (this.isRemoteMode()) {
+      return
+    }
     const enable = this.configManager.getUserConfig('auto-sync-tracker')
     const lastTime = this.configManager.getUserConfig('last-sync-tracker-time')
     const result = checkIsNeedRun(enable, lastTime, AUTO_SYNC_TRACKER_INTERVAL)
@@ -484,7 +544,7 @@ export default class Application extends EventEmitter {
 
   autoResumeTask () {
     const enabled = this.configManager.getUserConfig('resume-all-when-app-launched')
-    if (!enabled) {
+    if (!enabled || !this.engineClient) {
       return
     }
 
@@ -751,7 +811,9 @@ export default class Application extends EventEmitter {
         logger.info('[imFile] Removed the download seesion file:', err)
       })
 
-      this.engine.start()
+      if (this.engine) {
+        this.engine.start()
+      }
     }, 3000)
   }
 
@@ -761,7 +823,17 @@ export default class Application extends EventEmitter {
     if (!isEmpty(system)) {
       console.info('[imFile] main save system config: ', system)
       this.configManager.setSystemConfig(system)
-      this.engineClient.changeGlobalOption(system)
+      if (!this.isRemoteMode() && this.engineClient) {
+        const filtered = { ...system }
+        Object.keys(filtered).forEach((key) => {
+          if (key === 'rpc-mode' || key.startsWith('rpc-remote-')) {
+            delete filtered[key]
+          }
+        })
+        if (!isEmpty(filtered)) {
+          this.engineClient.changeGlobalOption(filtered)
+        }
+      }
     }
 
     if (!isEmpty(user)) {
@@ -937,6 +1009,7 @@ export default class Application extends EventEmitter {
     this.watchRunModeChange()
     this.watchShowProgressBarChange()
     this.watchProxyChange()
+    this.watchRpcModeChange()
     this.watchLocaleChange()
     this.watchThemeChange()
 

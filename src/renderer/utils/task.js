@@ -19,6 +19,7 @@ export const initTaskForm = state => {
   const {
     allProxy,
     dir,
+    rpcMode,
     engineMaxConnectionPerServer,
     followMetalink,
     followTorrent,
@@ -29,7 +30,7 @@ export const initTaskForm = state => {
   const result = {
     allProxy,
     cookie: '',
-    dir,
+    dir: rpcMode === 'remote' ? '' : dir,
     engineMaxConnectionPerServer,
     followMetalink,
     followTorrent,

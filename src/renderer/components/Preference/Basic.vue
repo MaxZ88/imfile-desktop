@@ -114,6 +114,7 @@
           </el-col>
         </el-form-item>
         <el-form-item
+          v-if="!isRemoteMode"
           :label="`${$t('preferences.default-dir')}: `"
           :label-width="formLabelWidth"
         >
@@ -529,7 +530,10 @@
       },
       ...mapState('preference', {
         config: state => state.config
-      })
+      }),
+      isRemoteMode () {
+        return this.config && this.config.rpcMode === 'remote'
+      }
     },
     methods: {
       nav (category = 'basic') {

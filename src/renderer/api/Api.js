@@ -8,7 +8,8 @@ import {
   formatOptionsForEngine,
   mergeTaskResult,
   changeKeysToCamelCase,
-  changeKeysToKebabCase
+  changeKeysToKebabCase,
+  mapRemotePathToLocal
 } from '@shared/utils'
 import { ENGINE_RPC_HOST } from '@shared/constants'
 
@@ -16,14 +17,14 @@ export default class Api {
   constructor (options = {}) {
     this.options = options
 
-    this.init()
+    this.client = new Aria2()
+    this.ready = this.init()
   }
 
   async init () {
     this.config = await this.loadConfig()
-
-    this.client = this.initClient()
-    this.client.open()
+    this.applyClientConfig()
+    this.openClient()
   }
 
   loadConfigFromLocalStorage () {
@@ -46,32 +47,115 @@ export default class Api {
     return result
   }
 
-  initClient () {
-    const { rpcListenPort: port, rpcSecret: secret } = this.config
-    const host = ENGINE_RPC_HOST
-    return new Aria2({
-      host,
-      port,
-      secret
-    })
+  getRpcClientOptions () {
+    const {
+      rpcMode,
+      rpcListenPort,
+      rpcSecret,
+      rpcRemoteHost,
+      rpcRemotePort,
+      rpcRemoteSecret,
+      rpcRemoteSecure,
+      rpcRemotePath
+    } = this.config || {}
+
+    if (rpcMode === 'remote') {
+      return {
+        host: rpcRemoteHost,
+        port: rpcRemotePort,
+        secret: rpcRemoteSecret,
+        secure: rpcRemoteSecure,
+        path: rpcRemotePath || '/jsonrpc'
+      }
+    }
+
+    return {
+      host: ENGINE_RPC_HOST,
+      port: rpcListenPort,
+      secret: rpcSecret,
+      secure: false,
+      path: '/jsonrpc'
+    }
   }
 
-  closeClient () {
-    this.client
-      .close()
-      .then(() => {
-        this.client = null
-      })
-      .catch((err) => {
-        console.log('engine client close fail', err)
-      })
+  applyClientConfig () {
+    const { host, port, secret, secure, path } = this.getRpcClientOptions()
+
+    this.client.host = host
+    this.client.port = port
+    this.client.secret = secret
+    this.client.secure = !!secure
+    this.client.path = path || '/jsonrpc'
   }
 
-  fetchPreference () {
-    return new Promise((resolve) => {
-      this.config = this.loadConfig()
-      resolve(this.config)
-    })
+  forceCloseClientSocket () {
+    if (!this.client || !this.client.socket) {
+      return
+    }
+    try {
+      this.client.socket.close()
+    } catch (e) {
+      return e
+    }
+    this.client.socket = null
+  }
+
+  openClient () {
+    this.forceCloseClientSocket()
+    this.client.open().catch((e) => e)
+  }
+
+  async reloadConfigAndReconnect () {
+    this.config = await this.loadConfig()
+    this.applyClientConfig()
+    this.openClient()
+    return this.config
+  }
+
+  async fetchPreference () {
+    this.config = await this.loadConfig()
+    return this.config
+  }
+
+  isRemoteMode () {
+    return this.config && this.config.rpcMode === 'remote'
+  }
+
+  getRemotePathMappingOptions () {
+    const { rpcRemoteDownloadDir: remoteDir, rpcRemoteMountPath: mountPath } = this.config || {}
+    return { remoteDir, mountPath }
+  }
+
+  shouldApplyRemotePathMapping () {
+    const { remoteDir, mountPath } = this.getRemotePathMappingOptions()
+    return this.isRemoteMode() && !isEmpty(remoteDir) && !isEmpty(mountPath)
+  }
+
+  mapTaskPaths (task) {
+    if (!task || !this.shouldApplyRemotePathMapping()) {
+      return task
+    }
+
+    const mapping = this.getRemotePathMappingOptions()
+    if (task.dir) {
+      task.dir = mapRemotePathToLocal(task.dir, mapping)
+    }
+    if (Array.isArray(task.files)) {
+      task.files.forEach((file) => {
+        if (file && file.path) {
+          file.path = mapRemotePathToLocal(file.path, mapping)
+        }
+      })
+    }
+    return task
+  }
+
+  mapTaskListPaths (taskList) {
+    if (!Array.isArray(taskList) || !this.shouldApplyRemotePathMapping()) {
+      return taskList
+    }
+    taskList.forEach((task) => this.mapTaskPaths(task))
+    return taskList
   }
 
   savePreference (params = {}) {
@@ -202,11 +286,10 @@ export default class Api {
         .then((data) => {
           console.log('[imFile] fetch downloading task list data:', data)
           const result = mergeTaskResult(data)
-          resolve(
-            result.filter(
-              (list) => list.completedLength !== list.totalLength
-            )
+          const list = result.filter(
+            (item) => item.completedLength !== item.totalLength
           )
+          resolve(this.mapTaskListPaths(list))
         })
         .catch((err) => {
           console.log('[imFile] fetch downloading task list fail:', err)
@@ -218,25 +301,33 @@ export default class Api {
   fetchWaitingTaskList (params = {}) {
     const { offset = 0, num = 20, keys } = params
     const args = compactUndefined([offset, num, keys])
-    return this.client.call('tellWaiting', ...args)
+    return this.client.call('tellWaiting', ...args).then((data) => {
+      return this.mapTaskListPaths(data)
+    })
   }
 
   fetchStoppedTaskList (params = {}) {
     const { offset = 0, num = 20, keys } = params
     const args = compactUndefined([offset, num, keys])
-    return this.client.call('tellStopped', ...args)
+    return this.client.call('tellStopped', ...args).then((data) => {
+      return this.mapTaskListPaths(data)
+    })
   }
 
   fetchDoneTaskList (params = {}) {
     const { offset = 0, num = 20, keys } = params
     const args = compactUndefined([offset, num, keys])
-    return this.client.call('tellDone', ...args)
+    return this.client.call('tellDone', ...args).then((data) => {
+      return this.mapTaskListPaths(data)
+    })
   }
 
   fetchActiveTaskList (params = {}) {
     const { keys } = params
     const args = compactUndefined([keys])
-    return this.client.call('tellActive', ...args)
+    return this.client.call('tellActive', ...args).then((data) => {
+      return this.mapTaskListPaths(data)
+    })
   }
 
   fetchSeedingTaskList (params = {}) {
@@ -248,9 +339,8 @@ export default class Api {
         .then((data) => {
           console.log('[imFile] fetch seeding task list data:', data)
           if (data.length > 0) {
-            resolve(
-              data.filter((list) => list.completedLength === list.totalLength)
-            )
+            const list = data.filter((item) => item.completedLength === item.totalLength)
+            resolve(this.mapTaskListPaths(list))
           } else {
             resolve([])
           }
@@ -308,7 +398,9 @@ export default class Api {
   fetchTaskItem (params = {}) {
     const { gid, keys } = params
     const args = compactUndefined([gid, keys])
-    return this.client.call('tellStatus', ...args)
+    return this.client.call('tellStatus', ...args).then((task) => {
+      return this.mapTaskPaths(task)
+    })
   }
 
   fetchTaskItemWithPeers (params = {}) {
@@ -329,7 +421,7 @@ export default class Api {
           console.log('[imFile] fetchTaskItemWithPeers.result:', result)
           console.log('[imFile] fetchTaskItemWithPeers.peers:', peers)
 
-          resolve(result)
+          resolve(this.mapTaskPaths(result))
         })
         .catch((err) => {
           console.log('[imFile] fetch downloading task list fail:', err)

@@ -709,3 +709,4 @@ export const getInverseTheme = (theme) => {
 
 export const changedConfig = { basic: {}, advanced: {} }
 export const backupConfig = { theme: undefined, locale: undefined }
+export { mapRemotePathToLocal } from './pathMapping'

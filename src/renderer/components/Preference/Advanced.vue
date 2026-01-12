@@ -124,6 +124,81 @@
           </el-col>
         </el-form-item>
         <el-form-item
+          :label="`${$t('preferences.aria2-mode')}: `"
+          :label-width="formLabelWidth"
+        >
+          <el-radio-group v-model="form.rpcMode" size="mini">
+            <el-radio-button label="local">{{ $t('preferences.aria2-mode-local') }}</el-radio-button>
+            <el-radio-button label="remote">{{ $t('preferences.aria2-mode-remote') }}</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item
+          v-if="isRemoteMode"
+          :label="`${$t('preferences.remote-rpc')}: `"
+          :label-width="formLabelWidth"
+        >
+          <el-row style="margin-bottom: 8px;">
+            <el-col class="form-item-sub" :xs="24" :sm="18" :md="10" :lg="10">
+              {{ $t('preferences.remote-rpc-host') }}
+              <el-input
+                placeholder="Host"
+                v-model="form.rpcRemoteHost"
+              />
+            </el-col>
+            <el-col class="form-item-sub" :xs="24" :sm="18" :md="6" :lg="6">
+              {{ $t('preferences.remote-rpc-port') }}
+              <el-input
+                placeholder="6800"
+                :maxlength="8"
+                v-model="form.rpcRemotePort"
+              />
+            </el-col>
+          </el-row>
+          <el-row style="margin-bottom: 8px;">
+            <el-col class="form-item-sub" :xs="24" :sm="18" :md="10" :lg="10">
+              {{ $t('preferences.remote-rpc-path') }}
+              <el-input
+                placeholder="/jsonrpc"
+                v-model="form.rpcRemotePath"
+              />
+            </el-col>
+            <el-col class="form-item-sub" :xs="24" :sm="18" :md="10" :lg="10">
+              <el-switch
+                v-model="form.rpcRemoteSecure"
+                :active-text="$t('preferences.remote-rpc-secure')"
+              />
+            </el-col>
+          </el-row>
+          <el-row style="margin-bottom: 8px;">
+            <el-col class="form-item-sub" :xs="24" :sm="18" :md="18" :lg="18">
+              {{ $t('preferences.remote-rpc-secret') }}
+              <el-input
+                :show-password="hideRpcSecret"
+                placeholder="RPC Secret"
+                :maxlength="64"
+                v-model="form.rpcRemoteSecret"
+              />
+            </el-col>
+          </el-row>
+          <el-row>
+            <el-col class="form-item-sub" :xs="24" :sm="18" :md="10" :lg="10">
+              {{ $t('preferences.remote-download-dir') }}
+              <el-input
+                placeholder="/downloads"
+                v-model="form.rpcRemoteDownloadDir"
+              />
+            </el-col>
+            <el-col class="form-item-sub" :xs="24" :sm="18" :md="14" :lg="14">
+              {{ $t('preferences.remote-mount-path') }}
+              <el-input
+                placeholder="/mnt/downloads"
+                v-model="form.rpcRemoteMountPath"
+              />
+            </el-col>
+          </el-row>
+        </el-form-item>
+        <el-form-item
+          v-if="!isRemoteMode"
           :label="`${$t('preferences.bt-tracker')}: `"
           :label-width="formLabelWidth"
         >
@@ -218,6 +293,7 @@
           </div>
         </el-form-item>
         <el-form-item
+          v-if="!isRemoteMode"
           :label="`${$t('preferences.rpc')}: `"
           :label-width="formLabelWidth"
         >
@@ -271,6 +347,7 @@
           </el-row>
         </el-form-item>
         <el-form-item
+          v-if="!isRemoteMode"
           :label="`${$t('preferences.port')}: `"
           :label-width="formLabelWidth"
         >
@@ -495,7 +572,15 @@
       logLevel,
       protocols,
       proxy,
+      rpcMode,
       rpcListenPort,
+      rpcRemoteDownloadDir,
+      rpcRemoteHost,
+      rpcRemoteMountPath,
+      rpcRemotePath,
+      rpcRemotePort,
+      rpcRemoteSecret,
+      rpcRemoteSecure,
       rpcSecret,
       trackerSource,
       useProxy,
@@ -514,7 +599,15 @@
       logLevel,
       proxy: cloneDeep(proxy),
       protocols: { ...protocols },
+      rpcMode: rpcMode || 'local',
       rpcListenPort,
+      rpcRemoteDownloadDir,
+      rpcRemoteHost,
+      rpcRemoteMountPath,
+      rpcRemotePath,
+      rpcRemotePort,
+      rpcRemoteSecret,
+      rpcRemoteSecure,
       rpcSecret,
       trackerSource,
       useProxy,
@@ -548,6 +641,9 @@
     },
     computed: {
       isRenderer: () => is.renderer(),
+      isRemoteMode () {
+        return this.form && this.form.rpcMode === 'remote'
+      },
       title () {
         return this.$t('preferences.advanced')
       },
@@ -585,13 +681,19 @@
     },
     watch: {
       'form.rpcListenPort' (val) {
+        if (this.isRemoteMode) {
+          return
+        }
         const url = buildRpcUrl({
           port: this.form.rpcListenPort,
-          secret: val
+          secret: this.form.rpcSecret
         })
         navigator.clipboard.writeText(url)
       },
       'form.rpcSecret' (val) {
+        if (this.isRemoteMode) {
+          return
+        }
         const url = buildRpcUrl({
           port: this.form.rpcListenPort,
           secret: val

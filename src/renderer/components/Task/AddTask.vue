@@ -62,6 +62,7 @@
         </el-col> -->
       </el-row>
       <el-form-item
+        v-if="!isRemoteMode"
         :label="`${$t('task.task-dir')}: `"
         :label-width="formLabelWidth"
       >
@@ -243,6 +244,9 @@
       ...mapState('preference', {
         config: state => state.config
       }),
+      isRemoteMode () {
+        return this.config && this.config.rpcMode === 'remote'
+      },
       taskType () {
         return this.type
       },
