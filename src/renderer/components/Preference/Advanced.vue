@@ -25,30 +25,16 @@
         :rules="rules"
       >
         <el-form-item
-          :label="`${$t('preferences.auto-update')}: `"
+          :label="`${$t('preferences.import-export')}: `"
           :label-width="formLabelWidth"
         >
           <el-col class="form-item-sub" :span="24">
-            <el-checkbox v-model="form.autoCheckUpdate">
-              {{ $t('preferences.auto-check-update') }}
-            </el-checkbox>
-            <div
-              class="el-form-item__info"
-              style="margin-top: 8px;"
-              v-if="form.lastCheckUpdateTime !== 0"
-            >
-              {{
-                $t('preferences.last-check-update-time') + ': ' +
-                (
-                  form.lastCheckUpdateTime !== 0 ?
-                    new Date(form.lastCheckUpdateTime).toLocaleString() :
-                    new Date().toLocaleString()
-                )
-              }}
-              <span class="action-link" @click.prevent="onCheckUpdateClick">
-                {{ $t('app.check-updates-now') }}
-              </span>
-            </div>
+            <el-button size="mini" @click="onExportPreferenceClick">
+              {{ $t('preferences.export-settings') }}
+            </el-button>
+            <el-button size="mini" @click="onImportPreferenceClick">
+              {{ $t('preferences.import-settings') }}
+            </el-button>
           </el-col>
         </el-form-item>
         <el-form-item
@@ -560,13 +546,11 @@
 
   const initForm = (config) => {
     const {
-      autoCheckUpdate,
       autoSyncTracker,
       btTracker,
       dhtListenPort,
       enableUpnp,
       hideAppMenu,
-      lastCheckUpdateTime,
       lastSyncTrackerTime,
       listenPort,
       logLevel,
@@ -587,13 +571,11 @@
       userAgent
     } = config
     const result = {
-      autoCheckUpdate,
       autoSyncTracker,
       btTracker: convertCommaToLine(btTracker),
       dhtListenPort,
       enableUpnp,
       hideAppMenu,
-      lastCheckUpdateTime,
       lastSyncTrackerTime,
       listenPort,
       logLevel,
@@ -713,14 +695,31 @@
         const lng = getLanguage(locale)
         getLocaleManager().changeLanguage(lng)
       },
-      onCheckUpdateClick () {
-        this.$electron.ipcRenderer.send('command', 'application:check-for-updates')
-        this.$msg.info(this.$t('app.checking-for-updates'))
-        this.$store.dispatch('preference/fetchPreference')
-          .then((config) => {
-            const { lastCheckUpdateTime } = config
-            this.form.lastCheckUpdateTime = lastCheckUpdateTime
-          })
+      async onExportPreferenceClick () {
+        try {
+          const result = await this.$electron.ipcRenderer.invoke('export-preference')
+          if (!result || result.canceled) {
+            return
+          }
+          this.$msg.success(this.$t('preferences.export-success'))
+        } catch (err) {
+          this.$msg.error(this.$t('preferences.export-failed'))
+        }
+      },
+      async onImportPreferenceClick () {
+        try {
+          const result = await this.$electron.ipcRenderer.invoke('import-preference')
+          if (!result || result.canceled) {
+            return
+          }
+          if (result.ok) {
+            this.$msg.success(this.$t('preferences.import-success'))
+          } else {
+            this.$msg.error(this.$t('preferences.import-failed'))
+          }
+        } catch (err) {
+          this.$msg.error(this.$t('preferences.import-failed'))
+        }
       },
       syncTrackerFromSource () {
         this.trackerSyncing = true

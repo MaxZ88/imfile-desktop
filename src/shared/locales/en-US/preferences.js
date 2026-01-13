@@ -100,6 +100,16 @@ export default {
   'auto-update': 'Auto Update',
   'auto-check-update': 'Automatically check for updates',
   'last-check-update-time': 'Last checked for an update',
+  'import-export': 'Import/Export Settings',
+  'export-settings': 'Export Settings',
+  'import-settings': 'Import Settings',
+  'export-success': 'Settings exported',
+  'export-failed': 'Export failed',
+  'import-success': 'Settings imported',
+  'import-failed': 'Import failed',
+  'import-relaunch-tip': 'Some settings require a restart to take effect. Restart now?',
+  'relaunch-now': 'Restart now',
+  'relaunch-later': 'Restart later',
   'not-saved': 'Preferences not saved',
   'not-saved-confirm': 'The modified preferences will be lost, are you sure you want to leave?'
 }

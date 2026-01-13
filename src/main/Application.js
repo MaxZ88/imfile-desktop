@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { readFile, unlink } from 'node:fs'
+import { readFile, unlink, writeFile } from 'node:fs'
 import { extname, basename } from 'node:path'
 import { app, shell, dialog, ipcMain } from 'electron'
 import is from 'electron-is'
@@ -8,10 +8,9 @@ import { isEmpty, isEqual } from 'lodash'
 import {
   APP_RUN_MODE,
   AUTO_SYNC_TRACKER_INTERVAL,
-  AUTO_CHECK_UPDATE_INTERVAL,
   PROXY_SCOPES
 } from '@shared/constants'
-import { checkIsNeedRun } from '@shared/utils'
+import { checkIsNeedRun, separateConfig } from '@shared/utils'
 import {
   convertTrackerDataToComma,
   fetchBtTrackerFromSource,
@@ -26,7 +25,6 @@ import Engine from './core/Engine'
 import EngineClient from './core/EngineClient'
 import UPnPManager from './core/UPnPManager'
 import AutoLaunchManager from './core/AutoLaunchManager'
-import UpdateManager from './core/UpdateManager'
 import EnergyManager from './core/EnergyManager'
 import ProtocolManager from './core/ProtocolManager'
 import WindowManager from './ui/WindowManager'
@@ -767,18 +765,6 @@ export default class Application extends EventEmitter {
   }
 
   initUpdaterManager () {
-    if (is.mas()) {
-      return
-    }
-    const enabled = this.configManager.getUserConfig('auto-check-update')
-    const proxy = this.configManager.getSystemConfig('all-proxy')
-    const lastTime = this.configManager.getUserConfig('last-check-update-time')
-    const autoCheck = checkIsNeedRun(enabled, lastTime, AUTO_CHECK_UPDATE_INTERVAL)
-    this.updateManager = new UpdateManager({
-      autoCheck,
-      proxy
-    })
-    this.handleUpdaterEvents()
   }
 
   handleUpdaterEvents () {
@@ -911,9 +897,13 @@ export default class Application extends EventEmitter {
       this.relaunch()
     })
 
-    // this.on('application:check-for-updates', () => {
-    //   this.updateManager.check()
-    // })
+    this.on('application:check-for-updates', () => {
+      dialog.showMessageBox({
+        type: 'info',
+        title: this.i18n.t('app.check-for-updates-title'),
+        message: this.i18n.t('app.update-disabled-message')
+      })
+    })
 
     this.on('application:change-theme', (theme) => {
       this.themeManager.updateSystemTheme(theme)
@@ -1130,6 +1120,118 @@ export default class Application extends EventEmitter {
         ...context
       }
       return result
+    })
+
+    ipcMain.handle('export-preference', async () => {
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        defaultPath: 'imfile-settings.json',
+        filters: [
+          {
+            name: 'JSON',
+            extensions: ['json']
+          }
+        ]
+      })
+
+      if (canceled || !filePath) {
+        return { canceled: true }
+      }
+
+      const payload = {
+        version: 1,
+        exportedAt: Date.now(),
+        user: this.configManager.getUserConfig(),
+        system: this.configManager.getSystemConfig()
+      }
+
+      const json = JSON.stringify(payload, null, 2)
+      await new Promise((resolve, reject) => {
+        writeFile(filePath, json, 'utf-8', (err) => {
+          if (err) {
+            reject(err)
+            return
+          }
+          resolve()
+        })
+      })
+
+      return { canceled: false, filePath }
+    })
+
+    ipcMain.handle('import-preference', async () => {
+      const { canceled, filePaths } = await dialog.showOpenDialog({
+        properties: ['openFile'],
+        filters: [
+          {
+            name: 'JSON',
+            extensions: ['json']
+          }
+        ]
+      })
+
+      if (canceled || !Array.isArray(filePaths) || filePaths.length === 0) {
+        return { canceled: true }
+      }
+
+      const [filePath] = filePaths
+      const raw = await new Promise((resolve, reject) => {
+        readFile(filePath, 'utf-8', (err, data) => {
+          if (err) {
+            reject(err)
+            return
+          }
+          resolve(data)
+        })
+      })
+
+      let parsed = null
+      try {
+        parsed = JSON.parse(raw)
+      } catch (err) {
+        await dialog.showMessageBox({
+          type: 'error',
+          title: this.i18n.t('preferences.import-failed'),
+          message: this.i18n.t('preferences.import-failed')
+        })
+        return { canceled: false, filePath, ok: false }
+      }
+
+      if (!parsed || typeof parsed !== 'object') {
+        await dialog.showMessageBox({
+          type: 'error',
+          title: this.i18n.t('preferences.import-failed'),
+          message: this.i18n.t('preferences.import-failed')
+        })
+        return { canceled: false, filePath, ok: false }
+      }
+
+      const payload = (parsed.user || parsed.system)
+        ? { ...parsed.user, ...parsed.system }
+        : parsed
+
+      const { user, system } = separateConfig(payload)
+      const fixedUser = { ...user, 'auto-check-update': false }
+
+      if (!isEmpty(system)) {
+        this.configManager.setSystemConfig(system)
+      }
+      if (!isEmpty(fixedUser)) {
+        this.configManager.setUserConfig(fixedUser)
+      }
+
+      const { response } = await dialog.showMessageBox({
+        type: 'info',
+        title: this.i18n.t('preferences.import-success'),
+        message: this.i18n.t('preferences.import-relaunch-tip'),
+        buttons: [this.i18n.t('preferences.relaunch-now'), this.i18n.t('preferences.relaunch-later')],
+        cancelId: 1
+      })
+
+      if (response === 0) {
+        this.relaunch()
+      }
+
+      return { canceled: false, filePath, ok: true }
     })
   }
 }

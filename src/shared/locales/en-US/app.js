@@ -7,6 +7,7 @@ export default {
   'check-updates-now': 'Check now',
   'checking-for-updates': 'Checking for updates ...',
   'check-for-updates-title': 'Check for Updates',
+  'update-disabled-message': 'Updates are disabled.',
   'update-available-message': 'A newer version of imFile is available, update now?',
   'update-not-available-message': 'You are up-to-date!',
   'update-downloaded-message': 'Ready to install...',
