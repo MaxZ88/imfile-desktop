@@ -51,10 +51,7 @@ export default class UPnPManager {
   }
 
   unmap (port) {
-    this.init()
-
     return new Promise((resolve, reject) => {
-      logger.info('[imFile] UPnPManager port unmapping: ', port)
       if (!port) {
         reject(new Error('[imFile] port was not specified'))
         return
@@ -64,6 +61,9 @@ export default class UPnPManager {
         resolve()
         return
       }
+
+      this.init()
+      logger.info('[imFile] UPnPManager port unmapping: ', port)
 
       try {
         client.unmap(port, (err) => {
