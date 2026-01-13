@@ -1,0 +1,4 @@
+owner: imfile-io
+repo: imfile-desktop
+provider: github
+updaterCacheDirName: imfile-updater
