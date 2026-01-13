@@ -11,13 +11,14 @@ init:
   - git config --global core.autocrlf input
 
 install:
-  - ps: Install-Product node 12.14.1 x64
+  - ps: Install-Product node 20 x64
   - git reset --hard HEAD
-  - npm install
+  - corepack prepare yarn@1.22.22 --activate
+  - yarn install --non-interactive
   - node --version
 
 build_script:
-  - npm run release
+  - yarn run release
 
 test: off
 

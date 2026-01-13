@@ -17,7 +17,7 @@
   "scripts": {
     "release": "node .electron-vue/build.js && electron-builder --publish onTagOrDraft",
     "build": "node .electron-vue/build.js && electron-builder",
-    "build:win7": "pnpm up electron@22 && node .electron-vue/build.js && electron-builder --win --config.directories.output=release/win32/7",
+    "build:win7": "yarn add -D electron@22 && node .electron-vue/build.js && electron-builder --win --config.directories.output=release/win32/7",
     "build:win10": "node .electron-vue/build.js && electron-builder --win --config.directories.output=release/win32/10",
     "build:applesilicon": "node .electron-vue/build.js && electron-builder --arm64 --mac",
     "build:github": "node .electron-vue/build.js",
@@ -28,10 +28,10 @@
     "dev:renderer": "webpack serve --node-env development --hot --color --config .electron-vue/webpack.renderer.config.js --port 9080 --content-base app/dist",
     "lint": "eslint --ext .js,.vue -f ./node_modules/eslint-friendly-formatter src",
     "lint:fix": "eslint --ext .js,.vue -f ./node_modules/eslint-friendly-formatter --fix src",
-    "pack": "npm run pack:main && npm run pack:renderer",
+    "pack": "yarn run pack:main && yarn run pack:renderer",
     "pack:main": "webpack --node-env production --progress --color --config .electron-vue/webpack.main.config.js",
     "pack:renderer": "webpack --node-env production --progress --color --config .electron-vue/webpack.renderer.config.js",
-    "postinstall": "electron-builder install-app-deps && npm run lint:fix"
+    "postinstall": "electron-builder install-app-deps && yarn run lint:fix"
   },
   "engines": {
     "node": ">=20.0.0"

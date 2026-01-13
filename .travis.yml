@@ -28,13 +28,14 @@ before_install:
 - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sudo apt-get install --no-install-recommends -y icnsutils graphicsmagick xz-utils; fi
 
 install:
-- nvm install 12.14.1
+- nvm install 20
 - source ~/.bashrc
 - npm install -g xvfb-maybe
-- npm install
+- corepack prepare yarn@1.22.22 --activate
+- yarn install --non-interactive
 
 script:
-- npm run release
+- yarn run release
 
 before_cache:
   - rm -rf $HOME/.cache/electron-builder/wine
