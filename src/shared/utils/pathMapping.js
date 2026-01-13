@@ -1,5 +1,3 @@
-import { join } from 'node:path'
-
 const normalizePosixPath = (value) => {
   return `${value || ''}`.replace(/\\/g, '/').trim()
 }
@@ -13,7 +11,7 @@ const normalizeRemoteRoot = (value) => {
 export const mapRemotePathToLocal = (remotePath, { remoteDir, mountPath } = {}) => {
   const rp = normalizePosixPath(remotePath)
   const rd = normalizeRemoteRoot(remoteDir)
-  const mp = `${mountPath || ''}`.trim()
+  const mp = normalizeRemoteRoot(mountPath)
 
   if (!rp || !rd || !mp) {
     return remotePath
@@ -34,5 +32,5 @@ export const mapRemotePathToLocal = (remotePath, { remoteDir, mountPath } = {}) 
     return mp
   }
 
-  return join(mp, ...segments)
+  return `${mp}/${segments.join('/')}`
 }
