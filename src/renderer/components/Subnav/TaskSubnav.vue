@@ -36,7 +36,7 @@
         <i class="subnav-icon">
           <mo-icon name="task-stop" width="20" height="20" />
         </i>
-        <span>{{`${$t('task.stopped')}${count.stoped ? '('+count.stoped+')': ''}`  }}</span>
+        <span>{{`${$t('task.stopped')}${count.stopped ? '('+count.stopped+')': ''}`  }}</span>
       </li>
     </ul>
   </nav>

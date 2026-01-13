@@ -16,7 +16,7 @@ const state = {
     downloading: 0,
     seeding: 0,
     waiting: 0,
-    stoped: 0
+    stopped: 0
   },
   selectedGidList: []
 }
@@ -72,13 +72,13 @@ const actions = {
       const downloading = downloadingList.filter((item) => item.completedLength !== item.totalLength).length
       const seeding = downloadingList.filter((item) => item.completedLength === item.totalLength).length
       const waiting = data[1][0].length
-      const stoped = data[2][0].length
+      const stopped = data[2][0].length
 
       commit('UPDATE_COUNT', {
         downloading,
         seeding,
         waiting,
-        stoped
+        stopped
       })
     })
   },
