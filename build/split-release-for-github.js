@@ -5,6 +5,8 @@ const DEFAULT_RELEASE_DIR = path.resolve(__dirname, '..', 'release')
 const DEFAULT_MAX_BYTES = 100 * 1024 * 1024
 const DEFAULT_CHUNK_BYTES = 95 * 1024 * 1024
 const DEFAULT_BUFFER_BYTES = 4 * 1024 * 1024
+const REPO_ROOT = path.resolve(__dirname, '..')
+const BACKUP_ROOT = path.join(REPO_ROOT, 'backup')
 
 function parseArgs (argv) {
   const args = {
@@ -94,11 +96,43 @@ async function removeFileIfExists (filePath) {
   }
 }
 
-async function splitFile (filePath, { chunkBytes, bufferBytes, dryRun }) {
-  const dir = path.dirname(filePath)
-  const baseName = path.basename(filePath)
+async function ensureDir (dirPath) {
+  await fs.promises.mkdir(dirPath, { recursive: true })
+}
 
-  const existingParts = await listExistingParts(dir, baseName)
+function getBackupPath (filePath) {
+  const relative = path.relative(REPO_ROOT, filePath)
+  const isInsideRepo = !relative.startsWith('..') && !path.isAbsolute(relative) && !relative.includes(':')
+  if (isInsideRepo) {
+    return path.join(BACKUP_ROOT, relative)
+  }
+
+  const parsed = path.parse(path.resolve(filePath))
+  const root = parsed.root
+  const drive = root && root.length >= 2 && root[1] === ':' ? root[0].toUpperCase() : 'ROOT'
+  const rest = path.resolve(filePath).slice(root.length)
+  return path.join(BACKUP_ROOT, '_external', drive, rest)
+}
+
+async function moveToBackup (filePath, { dryRun }) {
+  const backupPath = getBackupPath(filePath)
+  const backupDir = path.dirname(backupPath)
+
+  if (dryRun) {
+    console.log(`[dry-run] move: ${filePath} -> ${backupPath}`)
+    return backupPath
+  }
+
+  await ensureDir(backupDir)
+  await removeFileIfExists(backupPath)
+  await fs.promises.rename(filePath, backupPath)
+  console.log(`moved: ${filePath} -> ${backupPath}`)
+  return backupPath
+}
+
+async function splitFileFromSource (sourcePath, { targetDir, baseName, chunkBytes, bufferBytes, dryRun }) {
+  const existingParts = await listExistingParts(targetDir, baseName)
+
   if (existingParts.length > 0) {
     if (!dryRun) {
       for (const partPath of existingParts) {
@@ -107,7 +141,7 @@ async function splitFile (filePath, { chunkBytes, bufferBytes, dryRun }) {
     }
   }
 
-  const input = await fs.promises.open(filePath, 'r')
+  const input = await fs.promises.open(sourcePath, 'r')
   try {
     const stat = await input.stat()
     const totalBytes = stat.size
@@ -118,11 +152,11 @@ async function splitFile (filePath, { chunkBytes, bufferBytes, dryRun }) {
 
     while (offset < totalBytes) {
       const partFileName = `${baseName}.part${String(part).padStart(2, '0')}`
-      const partPath = path.join(dir, partFileName)
+      const partPath = path.join(targetDir, partFileName)
 
       if (dryRun) {
         const end = Math.min(offset + chunkBytes, totalBytes)
-        console.log(`[dry-run] split: ${filePath} -> ${partPath} (${end - offset} bytes)`)
+        console.log(`[dry-run] split: ${sourcePath} -> ${partPath} (${end - offset} bytes)`)
         offset = end
         part++
         continue
@@ -147,10 +181,6 @@ async function splitFile (filePath, { chunkBytes, bufferBytes, dryRun }) {
     }
   } finally {
     await input.close()
-  }
-
-  if (!dryRun) {
-    await removeFileIfExists(filePath)
   }
 }
 
@@ -183,8 +213,12 @@ async function main () {
 
   console.log(`found ${candidates.length} file(s) > ${maxBytes} bytes`)
   for (const item of candidates) {
-    console.log(`split: ${item.filePath} (${item.size} bytes)`)
-    await splitFile(item.filePath, { chunkBytes, bufferBytes, dryRun })
+    const filePath = item.filePath
+    const targetDir = path.dirname(filePath)
+    const baseName = path.basename(filePath)
+    console.log(`split: ${filePath} (${item.size} bytes)`)
+    const backupPath = await moveToBackup(filePath, { dryRun })
+    await splitFileFromSource(backupPath, { targetDir, baseName, chunkBytes, bufferBytes, dryRun })
   }
 
   console.log('done')
@@ -194,4 +228,3 @@ main().catch((e) => {
   console.error(e)
   process.exitCode = 1
 })
-
